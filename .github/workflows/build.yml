@@ -1,0 +1,43 @@
+name: Build Disco Translator 2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build (sln/csproj under pluginsrc)
+        shell: pwsh
+        run: |
+          $sln = Get-ChildItem -Recurse -Path pluginsrc -Filter *.sln | Select-Object -First 1
+          if ($sln) {
+            dotnet build $sln.FullName -c Release
+          } else {
+            $csproj = Get-ChildItem -Recurse -Path pluginsrc -Filter *.csproj | Select-Object -First 1
+            if (-not $csproj) { throw "No .sln or .csproj found under pluginsrc" }
+            dotnet build $csproj.FullName -c Release
+          }
+
+      - name: Collect DLLs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Get-ChildItem -Recurse -Path pluginsrc -Filter *.dll |
+            Where-Object { $_.FullName -match "\\bin\\Release\\" } |
+            Copy-Item -Destination out -Force
+          Get-ChildItem out
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiscoTranslator2_DLLs
+          path: out/
